@@ -1,0 +1,10 @@
+fastapi==0.112.0
+uvicorn[standard]==0.30.3
+pydantic==2.8.2
+requests
+psutil
+chromadb==0.4.22
+numpy<2.0.0
+# MySQL 数据库操作模块依赖
+pymysql>=1.0.2
+# Note: sqlite3 is included in Python standard library

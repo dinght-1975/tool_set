@@ -1,0 +1,9 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+编写测试脚本和服务启动脚本等用来验证程序的的脚本，请放入到pyservices/debug-test目录下.
+编写的一些方案修改，代码修改的文档，请放到docs目录下.
+pyservices是后端python服务的工程目录，相关的文件比如requirments.txt等到在这个目录下.
+界面上展示的信息和后端返回给前端的信息，请用英文展示。
