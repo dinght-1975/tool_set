@@ -73,6 +73,9 @@ class ExecutionLogger:
     def __init__(self):
         self.config = ExecutionLogConfig()
         self._init_storage()
+        # 初始化线程变量存储执行日志
+        if not hasattr(self._thread_local, 'exe_logs'):
+            self._thread_local.exe_logs = []
     
     @classmethod
     def get_instance(cls) -> 'ExecutionLogger':
@@ -85,8 +88,8 @@ class ExecutionLogger:
         return cls._thread_local.logger
     
     @staticmethod
-    def log_execution(command: str, result: Any = None, 
-                     execution_time: Optional[datetime] = None, time_cost_ms: int = 0) -> bool:
+    def write_log(command: str, result: Any = None, 
+                  execution_time: Optional[datetime] = None, time_cost_ms: int = 0) -> bool:
         """
         写入执行日志的静态方法
         
@@ -114,6 +117,23 @@ class ExecutionLogger:
         """
         logger = ExecutionLogger.get_instance()
         logger._thread_local.current_user = user
+    
+    @staticmethod
+    def get_thread_logs() -> List[Dict[str, Any]]:
+        """
+        获取当前线程的执行日志
+        
+        Returns:
+            List[Dict]: 当前线程的执行日志列表
+        """
+        logger = ExecutionLogger.get_instance()
+        return getattr(logger._thread_local, 'exe_logs', [])
+    
+    @staticmethod
+    def clear_thread_logs() -> None:
+        """清除当前线程的执行日志"""
+        logger = ExecutionLogger.get_instance()
+        logger._thread_local.exe_logs = []
     
     @staticmethod
     def query_logs(user: Optional[str] = None, 
@@ -242,6 +262,9 @@ class ExecutionLogger:
                     result_str = str(result)
             else:
                 result_str = None
+            
+            # 保存到线程变量
+            self._save_to_thread_logs(user, command, result, execution_time, time_cost_ms)
             
             if self.config.log_type == 'mysql':
                 return self._write_mysql_log(user, command, result_str, execution_time, time_cost_ms)
@@ -495,6 +518,18 @@ class ExecutionLogger:
         except:
             return "system"
     
+    def _save_to_thread_logs(self, user: str, command: str, result: Any, 
+                           execution_time: datetime, time_cost_ms: int) -> None:
+        """保存执行日志到线程变量"""
+        log_entry = {
+            'user': user,
+            'command': command,
+            'result': result,
+            'execution_time': execution_time.isoformat(),
+            'time_cost_ms': time_cost_ms
+        }
+        self._thread_local.exe_logs.append(log_entry)
+    
     def query_logs(self, user: Optional[str] = None, 
                    start_time: Optional[datetime] = None,
                    end_time: Optional[datetime] = None,
@@ -532,7 +567,8 @@ def write_execution_log(command: str, result: Any = None,
     Returns:
         bool: 是否写入成功
     """
-    return ExecutionLogger.write_log(command, result, execution_time, time_cost_ms)
+    logger = ExecutionLogger.get_instance()
+    return logger.write_log(command, result, execution_time, time_cost_ms)
 
 def query_execution_logs(user: Optional[str] = None, 
                         start_time: Optional[datetime] = None,

@@ -157,6 +157,10 @@ class DynamicRouteManager:
             # 清除之前的线程变量结果
             clear_result()
             
+            # 清除执行日志线程变量
+            from utils.exe_log import ExecutionLogger
+            ExecutionLogger.clear_thread_logs()
+            
             try:
                 # 记录工具使用
                 await self._record_tool_usage(tool_node)
@@ -166,6 +170,11 @@ class DynamicRouteManager:
                 
                 # 获取线程变量中的结果
                 result = get_result()
+                
+                # 获取执行日志并添加到响应中
+                execution_logs = ExecutionLogger.get_thread_logs()
+                if execution_logs:
+                    result["execution_logs"] = execution_logs
                 
                 # 返回线程变量中的结果
                 return JSONResponse(content=result)
@@ -177,6 +186,11 @@ class DynamicRouteManager:
                 
                 # 获取线程变量中的结果（包含错误信息）
                 result = get_result()
+                
+                # 获取执行日志并添加到响应中
+                execution_logs = ExecutionLogger.get_thread_logs()
+                if execution_logs:
+                    result["execution_logs"] = execution_logs
                 
                 # 返回错误结果
                 return JSONResponse(content=result, status_code=500)
@@ -327,6 +341,34 @@ async def get_system_health() -> Dict[str, Any]:
             "status": "unhealthy",
             "error": str(e),
             "timestamp": "2025-08-30T00:00:00Z"
+        }
+
+@router.get("/test-execution-logs", summary="测试执行日志功能")
+async def test_execution_logs() -> Dict[str, Any]:
+    """测试执行日志功能"""
+    try:
+        from utils.exe_log import write_execution_log, ExecutionLogger
+        
+        # 模拟一些执行日志
+        write_execution_log("SELECT * FROM test_table", {"count": 5}, time_cost_ms=100)
+        write_execution_log("INSERT INTO logs (message) VALUES (?)", {"affected_rows": 1}, time_cost_ms=50)
+        write_execution_log("UPDATE users SET status = ?", {"affected_rows": 3}, time_cost_ms=75)
+        
+        # 获取线程日志
+        thread_logs = ExecutionLogger.get_thread_logs()
+        
+        return {
+            "message": "Execution logs test completed",
+            "success": True,
+            "logs_count": len(thread_logs),
+            "execution_logs": thread_logs
+        }
+    except Exception as e:
+        print_exception_stack(e, "测试执行日志", "ERROR")
+        return {
+            "message": f"Error: {str(e)}",
+            "success": False,
+            "error": str(e)
         }
 
 

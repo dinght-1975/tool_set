@@ -19,10 +19,10 @@ import time
 import logging
 import traceback
 from utils.exception_handler import print_exception_stack, handle_exception
+from utils.logger_config import setup_logging
 
-# 设置日志
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# 设置日志 - 从环境变量读取配置
+logger = setup_logging()
 
 app = FastAPI(title="Lupin Studio Backend", version="0.1.0")
 

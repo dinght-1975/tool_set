@@ -33,6 +33,7 @@ MANIFEST
 *.sqlite
 *.sqlite3
 db.config.json
+sqlite_dbs/
 
 # Logs
 *.log

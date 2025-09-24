@@ -7,10 +7,14 @@ Provides basic database operations for tool_set
 import sqlite3
 import os
 import time
+import logging
 from typing import Dict, Any, Optional, List, Union
 from pathlib import Path
 from utils.exception_handler import print_exception_stack
-from utils.exe_log import ExecutionLogger
+from utils.exe_log import write_execution_log 
+
+# 创建logger
+logger = logging.getLogger(__name__)
 
 
 class SimpleSQLDB:
@@ -29,7 +33,7 @@ class SimpleSQLDB:
         if db_name not in self.connections:
             if self.db_type == "sqlite":
                 # Create database file in project directory
-                db_path = Path(__file__).parent.parent.parent / f"{db_name}.db"
+                db_path = Path(__file__).parent.parent.parent / f"sqlite_dbs/{db_name}.db"
                 self.connections[db_name] = sqlite3.connect(str(db_path))
             else:
                 raise ValueError(f"Unsupported database type: {self.db_type}")
@@ -40,6 +44,13 @@ class SimpleSQLDB:
         """Execute SQL statement"""
         start_time = time.time()
         result = None
+        
+        # 记录SQL和参数日志
+        logger.debug(f"Executing SQL: {sql}")
+        if params:
+            logger.debug(f"Parameters: {params}")
+        else:
+            logger.debug("No parameters")
         
         try:
             conn = self.get_connection(db_name)
@@ -77,7 +88,7 @@ class SimpleSQLDB:
             
             # 记录执行日志
             time_cost_ms = int((time.time() - start_time) * 1000)
-            ExecutionLogger.log_execution(
+            write_execution_log(
                 command=sql,
                 result=result,
                 time_cost_ms=time_cost_ms
@@ -96,7 +107,7 @@ class SimpleSQLDB:
             
             # 记录错误日志
             time_cost_ms = int((time.time() - start_time) * 1000)
-            ExecutionLogger.log_execution(
+            write_execution_log(
                 command=sql,
                 result=result,
                 time_cost_ms=time_cost_ms
@@ -108,6 +119,11 @@ class SimpleSQLDB:
         """Execute SQL statement multiple times"""
         start_time = time.time()
         result = None
+        
+        # 记录SQL和参数日志
+        logger.debug(f"Executing SQL (batch): {sql}")
+        logger.debug(f"Batch size: {len(params_list)}")
+        logger.debug(f"Parameters list: {params_list}")
         
         try:
             conn = self.get_connection(db_name)
@@ -124,7 +140,7 @@ class SimpleSQLDB:
             
             # 记录执行日志
             time_cost_ms = int((time.time() - start_time) * 1000)
-            ExecutionLogger.log_execution(
+            write_execution_log(
                 command=f"EXECUTEMANY: {sql} (batch_size: {len(params_list)})",
                 result=result,
                 time_cost_ms=time_cost_ms
@@ -143,7 +159,7 @@ class SimpleSQLDB:
             
             # 记录错误日志
             time_cost_ms = int((time.time() - start_time) * 1000)
-            ExecutionLogger.log_execution(
+            write_execution_log(
                 command=f"EXECUTEMANY: {sql} (batch_size: {len(params_list)})",
                 result=result,
                 time_cost_ms=time_cost_ms
