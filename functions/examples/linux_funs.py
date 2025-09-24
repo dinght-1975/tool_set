@@ -8,6 +8,7 @@ import subprocess
 import os
 from typing import Optional, Dict, Any
 from utils.exception_handler import print_exception_stack
+from utils.output import show_info, show_error, show_warning
 #测试
 
 def execute_ls_command(directory: str = None, options: str = "") -> Dict[str, Any]:
@@ -17,7 +18,7 @@ def execute_ls_command(directory: str = None, options: str = "") -> Dict[str, An
     Args:
         directory (str, optional): 要列出内容的目录路径，如果为None则使用当前目录
         options (str): ls 命令的选项参数，如 "-la", "-lh" 等
-    
+        
     Returns:
         Dict[str, Any]: 包含执行结果的字典
             - success (bool): 命令是否执行成功
@@ -31,12 +32,16 @@ def execute_ls_command(directory: str = None, options: str = "") -> Dict[str, An
         if directory is None:
             directory = os.getcwd()
         
+        show_info(f"Executing ls command in directory: {directory}", "LS Command")
+        
         # 验证目录是否存在
         if not os.path.exists(directory):
+            error_msg = f"Directory does not exist: {directory}"
+            show_error(error_msg, "Directory Error")
             return {
                 "success": False,
                 "output": "",
-                "error": f"目录不存在: {directory}",
+                "error": error_msg,
                 "command": f"ls {options} {directory}",
                 "directory": directory
             }
@@ -46,6 +51,8 @@ def execute_ls_command(directory: str = None, options: str = "") -> Dict[str, An
             command = ["ls"] + options.split() + [directory]
         else:
             command = ["ls", directory]
+        
+        show_info(f"Command: {' '.join(command)}", "Command Info")
         
         # 执行命令
         result = subprocess.run(
@@ -57,36 +64,48 @@ def execute_ls_command(directory: str = None, options: str = "") -> Dict[str, An
         
         # 检查命令执行结果
         if result.returncode == 0:
+            output = result.stdout.strip()
+            if output:
+                show_info(f"Command output:\n{output}", "LS Output")
+            else:
+                show_info("Command executed successfully (no output)", "LS Output")
+            
             return {
                 "success": True,
-                "output": result.stdout.strip(),
+                "output": output,
                 "error": "",
                 "command": " ".join(command),
                 "directory": directory
             }
         else:
+            error_msg = result.stderr.strip()
+            show_error(f"Command failed: {error_msg}", "LS Error")
             return {
                 "success": False,
                 "output": "",
-                "error": result.stderr.strip(),
+                "error": error_msg,
                 "command": " ".join(command),
                 "directory": directory
             }
             
     except subprocess.TimeoutExpired:
+        error_msg = "Command execution timeout (30 seconds)"
+        show_error(error_msg, "Timeout Error")
         return {
             "success": False,
             "output": "",
-            "error": "命令执行超时",
+            "error": error_msg,
             "command": f"ls {options} {directory}",
             "directory": directory
         }
     except Exception as e:
         print_exception_stack(e, "执行 ls 命令", "ERROR")
+        error_msg = f"Error executing command: {str(e)}"
+        show_error(error_msg, "Execution Error")
         return {
             "success": False,
             "output": "",
-            "error": f"执行命令时发生错误: {str(e)}",
+            "error": error_msg,
             "command": f"ls {options} {directory}",
             "directory": directory
         }
@@ -101,7 +120,7 @@ def list_directory_contents(directory: str = None, show_hidden: bool = False, lo
         show_hidden (bool): 是否显示隐藏文件
         long_format (bool): 是否使用长格式显示
         human_readable (bool): 是否使用人类可读的文件大小
-    
+        
     Returns:
         Dict[str, Any]: ls 命令的执行结果
     """
@@ -118,6 +137,7 @@ def list_directory_contents(directory: str = None, show_hidden: bool = False, lo
     
     options_str = " ".join(options)
     
+    show_info(f"Listing directory contents with options: {options_str or 'default'}", "Directory Listing")
     return execute_ls_command(directory, options_str)
 
 

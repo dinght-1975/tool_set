@@ -15,6 +15,7 @@ from pydantic import BaseModel, create_model, validator, Field
 import sys
 from pathlib import Path
 from utils.exception_handler import print_exception_stack, safe_execute
+from utils.output import show_error, get_result, clear_result
 
 # 添加项目根目录到 Python 路径（如果还没有添加）
 current_file = Path(__file__).resolve()
@@ -152,27 +153,33 @@ class DynamicRouteManager:
         response_model = self.create_dynamic_model(tool_node, is_request=False)
         
         # 生成端点函数
-        async def dynamic_endpoint(request: request_model = Body(...)) -> response_model:
+        async def dynamic_endpoint(request: request_model = Body(...)) -> JSONResponse:
+            # 清除之前的线程变量结果
+            clear_result()
+            
             try:
                 # 记录工具使用
                 await self._record_tool_usage(tool_node)
                 
                 # 执行工具函数
-                result = await self._execute_tool_function(tool_node, request)
+                await self._execute_tool_function(tool_node, request)
                 
-                # 返回结果
-                if hasattr(response_model, 'success'):
-                    return response_model(success=True, result=result, message="执行成功")
-                else:
-                    return response_model(result=result)
+                # 获取线程变量中的结果
+                result = get_result()
+                
+                # 返回线程变量中的结果
+                return JSONResponse(content=result)
                     
             except Exception as e:
+                # 捕获所有异常，调用 show_error
+                show_error(str(e), f"执行工具 {tool_node.name} 时发生错误")
                 print_exception_stack(e, "执行工具函数", "ERROR")
-                # 错误处理
-                if hasattr(response_model, 'success'):
-                    return response_model(success=False, result=None, message=str(e))
-                else:
-                    raise HTTPException(status_code=500, detail=str(e))
+                
+                # 获取线程变量中的结果（包含错误信息）
+                result = get_result()
+                
+                # 返回错误结果
+                return JSONResponse(content=result, status_code=500)
         
         # 设置函数元数据
         dynamic_endpoint.__name__ = f"execute_{tool_node.name}"
@@ -190,7 +197,7 @@ class DynamicRouteManager:
             # 记录失败不影响主要功能
             pass
     
-    async def _execute_tool_function(self, tool_node: ToolNode, request: Any) -> Any:
+    async def _execute_tool_function(self, tool_node: ToolNode, request: Any) -> None:
         """执行工具函数"""
         try:
             # 根据 module_path 和 function_name 动态导入和执行函数
@@ -199,10 +206,6 @@ class DynamicRouteManager:
             
             # 解析模块路径
             module_path = tool_node.module_path.replace('/', '.').replace('.py', '')
-            if module_path.startswith('pyservices.'):
-                module_path = module_path[12:]  # 移除 pyservices. 前缀
-            if not module_path.startswith('tool_set.'):
-                module_path = 'tool_set.' + module_path
             # 动态导入模块
             module = importlib.import_module(module_path)
             
@@ -216,21 +219,19 @@ class DynamicRouteManager:
                     if tool_node.parameters:
                         # 有参数的情况
                         kwargs = request.dict() if hasattr(request, 'dict') else request
-                        result = await func(**kwargs)
+                        await func(**kwargs)
                     else:
                         # 无参数的情况
-                        result = await func()
+                        await func()
                 else:
                     # 同步函数
                     if tool_node.parameters:
                         # 有参数的情况
                         kwargs = request.dict() if hasattr(request, 'dict') else request
-                        result = func(**kwargs)
+                        func(**kwargs)
                     else:
                         # 无参数的情况
-                        result = func()
-                
-                return result
+                        func()
             else:
                 raise ValueError(f"模块 {module_path} 中未找到函数 {tool_node.function_name}")
                 
@@ -252,10 +253,10 @@ class DynamicRouteManager:
                     # 创建路由路径：使用 module_path + function_name
                     if tool.module_path and tool.function_name:
                         # 清理模块路径，移除 .py 后缀和 pyservices 前缀
-                        route_path = f"/functions/{tool.module_path}/{tool.function_name}"
+                        route_path = f"/{tool.module_path}/{tool.function_name}"
                     else:
                         # 回退到使用工具名称
-                        route_path = f"/functions/{tool.name}"
+                        route_path = f"/{tool.name}"
                     
                     print(f"🔍 调试: 正在注册路由 {route_path} 到路由器 {self.router}")
                     
@@ -266,7 +267,6 @@ class DynamicRouteManager:
                         methods=["POST"],
                         summary=f"执行工具: {tool.name}",
                         description=tool.description,
-                        response_model=self.create_dynamic_model(tool, is_request=False),
                         tags=["dynamic-tools"]
                     )
                     

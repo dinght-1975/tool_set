@@ -32,6 +32,7 @@ MANIFEST
 *.db
 *.sqlite
 *.sqlite3
+db.config.json
 
 # Logs
 *.log
@@ -97,7 +98,7 @@ venv.bak/
 
 # mkdocs documentation
 /site
-
+execution_logs/
 # mypy
 .mypy_cache/
 .dmypy.json

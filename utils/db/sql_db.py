@@ -6,9 +6,11 @@ Provides basic database operations for tool_set
 
 import sqlite3
 import os
+import time
 from typing import Dict, Any, Optional, List, Union
 from pathlib import Path
 from utils.exception_handler import print_exception_stack
+from utils.exe_log import ExecutionLogger
 
 
 class SimpleSQLDB:
@@ -36,6 +38,9 @@ class SimpleSQLDB:
     
     def execute(self, sql: str, db_name: str = None, params: Optional[Union[tuple, list, dict]] = None) -> Dict[str, Any]:
         """Execute SQL statement"""
+        start_time = time.time()
+        result = None
+        
         try:
             conn = self.get_connection(db_name)
             cursor = conn.cursor()
@@ -53,7 +58,7 @@ class SimpleSQLDB:
                 # Convert to list of dictionaries
                 data = [dict(zip(columns, row)) for row in results]
                 
-                return {
+                result = {
                     "success": True,
                     "type": "select",
                     "data": data,
@@ -63,24 +68,47 @@ class SimpleSQLDB:
             else:
                 # For INSERT, UPDATE, DELETE
                 conn.commit()
-                return {
+                result = {
                     "success": True,
                     "type": "modify",
                     "row_count": cursor.rowcount,
                     "lastrowid": cursor.lastrowid
                 }
+            
+            # 记录执行日志
+            time_cost_ms = int((time.time() - start_time) * 1000)
+            ExecutionLogger.log_execution(
+                command=sql,
+                result=result,
+                time_cost_ms=time_cost_ms
+            )
+            
+            return result
                 
         except Exception as e:
             print_exception_stack(e, "执行 SQL", "ERROR")
-            return {
+            result = {
                 "success": False,
                 "type": "error",
                 "error": str(e),
                 "message": f"Database operation failed: {str(e)}"
             }
+            
+            # 记录错误日志
+            time_cost_ms = int((time.time() - start_time) * 1000)
+            ExecutionLogger.log_execution(
+                command=sql,
+                result=result,
+                time_cost_ms=time_cost_ms
+            )
+            
+            return result
     
     def executemany(self, sql: str, params_list: List[Union[tuple, list, dict]], db_name: str = None) -> Dict[str, Any]:
         """Execute SQL statement multiple times"""
+        start_time = time.time()
+        result = None
+        
         try:
             conn = self.get_connection(db_name)
             cursor = conn.cursor()
@@ -88,20 +116,40 @@ class SimpleSQLDB:
             cursor.executemany(sql, params_list)
             conn.commit()
             
-            return {
+            result = {
                 "success": True,
                 "type": "modify",
                 "row_count": cursor.rowcount
             }
+            
+            # 记录执行日志
+            time_cost_ms = int((time.time() - start_time) * 1000)
+            ExecutionLogger.log_execution(
+                command=f"EXECUTEMANY: {sql} (batch_size: {len(params_list)})",
+                result=result,
+                time_cost_ms=time_cost_ms
+            )
+            
+            return result
                 
         except Exception as e:
             print_exception_stack(e, "执行 SQL", "ERROR")
-            return {
+            result = {
                 "success": False,
                 "type": "error",
                 "error": str(e),
                 "message": f"Database operation failed: {str(e)}"
             }
+            
+            # 记录错误日志
+            time_cost_ms = int((time.time() - start_time) * 1000)
+            ExecutionLogger.log_execution(
+                command=f"EXECUTEMANY: {sql} (batch_size: {len(params_list)})",
+                result=result,
+                time_cost_ms=time_cost_ms
+            )
+            
+            return result
     
     def rollback(self, db_name: str = "all") -> Dict[str, Any]:
         """Rollback transaction"""

@@ -8,8 +8,9 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from db.db_exe import execute, executemany, rollback, commit
-from typing import Dict, Any, Optional, List
+from db.db_funs import sql_query
+from typing import Optional, Dict, Any, List
+from utils.output import show_info, show_error, show_warning
 
 
 class UserTool:
@@ -28,8 +29,10 @@ class UserTool:
         创建用户表
         
         Returns:
-            执行结果字典
+            Dict[str, Any]: 执行结果字典
         """
+        show_info("Creating user table", "Database Setup")
+        
         sql = """
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -42,15 +45,18 @@ class UserTool:
         )
         """
         
-        result = execute(sql, self.db_name, db_type=self.db_type)
+        result = sql_query(sql, self.db_name, db_type=self.db_type)
         
         if result['success']:
             # 创建索引以提高查询性能
+            show_info("Creating indexes for better performance", "Database Setup")
             index_sql = "CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)"
-            execute(index_sql, self.db_name, db_type=self.db_type)
+            sql_query(index_sql, self.db_name, db_type=self.db_type)
             
             index_sql2 = "CREATE INDEX IF NOT EXISTS idx_users_name ON users(name)"
-            execute(index_sql2, self.db_name, db_type=self.db_type)
+            sql_query(index_sql2, self.db_name, db_type=self.db_type)
+            
+            show_info("User table and indexes created successfully", "Database Setup")
         
         return result
     
@@ -65,12 +71,19 @@ class UserTool:
             status: 用户状态，默认为 'active'
             
         Returns:
-            执行结果字典
+            Dict[str, Any]: 执行结果字典
         """
+        show_info(f"Adding user: {name} ({email})", "User Management")
+        
         sql = "INSERT INTO users (name, email, age, status) VALUES (?, ?, ?, ?)"
         params = (name, email, age, status)
         
-        return execute(sql, self.db_name, params, self.db_type)
+        result = sql_query(sql, self.db_name, params, self.db_type)
+        
+        if result['success']:
+            show_info(f"User {name} added successfully", "User Management")
+        
+        return result
     
     def get_user_by_name(self, name: str) -> Dict[str, Any]:
         """
@@ -80,12 +93,19 @@ class UserTool:
             name: 用户名称
             
         Returns:
-            查询结果字典
+            Dict[str, Any]: 查询结果字典
         """
+        show_info(f"Searching for user by name: {name}", "User Query")
+        
         sql = "SELECT * FROM users WHERE name = ?"
         params = (name,)
         
-        return execute(sql, self.db_name, params, self.db_type)
+        result = sql_query(sql, self.db_name, params, self.db_type)
+        
+        if result['success'] and result.get('data'):
+            show_info(f"Found {len(result['data'])} user(s) with name '{name}'", "Query Result")
+        
+        return result
     
     def get_user_by_email(self, email: str) -> Dict[str, Any]:
         """
@@ -95,12 +115,19 @@ class UserTool:
             email: 用户邮件地址
             
         Returns:
-            查询结果字典
+            Dict[str, Any]: 查询结果字典
         """
+        show_info(f"Searching for user by email: {email}", "User Query")
+        
         sql = "SELECT * FROM users WHERE email = ?"
         params = (email,)
         
-        return execute(sql, self.db_name, params, self.db_type)
+        result = sql_query(sql, self.db_name, params, self.db_type)
+        
+        if result['success'] and result.get('data'):
+            show_info(f"Found {len(result['data'])} user(s) with email '{email}'", "Query Result")
+        
+        return result
     
     def get_user_by_name_and_email(self, name: str, email: str) -> Dict[str, Any]:
         """
@@ -111,12 +138,19 @@ class UserTool:
             email: 用户邮件地址
             
         Returns:
-            查询结果字典
+            Dict[str, Any]: 查询结果字典
         """
+        show_info(f"Searching for user by name and email: {name} ({email})", "User Query")
+        
         sql = "SELECT * FROM users WHERE name = ? AND email = ?"
         params = (name, email)
         
-        return execute(sql, self.db_name, params, self.db_type)
+        result = sql_query(sql, self.db_name, params, self.db_type)
+        
+        if result['success'] and result.get('data'):
+            show_info(f"Found {len(result['data'])} user(s) with name '{name}' and email '{email}'", "Query Result")
+        
+        return result
     
     def search_users_by_name(self, name_pattern: str) -> Dict[str, Any]:
         """
@@ -126,12 +160,19 @@ class UserTool:
             name_pattern: 用户名称模式（支持 % 通配符）
             
         Returns:
-            查询结果字典
+            Dict[str, Any]: 查询结果字典
         """
+        show_info(f"Searching users by name pattern: {name_pattern}", "User Search")
+        
         sql = "SELECT * FROM users WHERE name LIKE ?"
         params = (name_pattern,)
         
-        return execute(sql, self.db_name, params, self.db_type)
+        result = sql_query(sql, self.db_name, params, self.db_type)
+        
+        if result['success'] and result.get('data'):
+            show_info(f"Found {len(result['data'])} user(s) matching pattern '{name_pattern}'", "Search Result")
+        
+        return result
     
     def get_all_users(self, limit: Optional[int] = None, offset: int = 0) -> Dict[str, Any]:
         """
@@ -142,8 +183,10 @@ class UserTool:
             offset: 偏移量
             
         Returns:
-            查询结果字典
+            Dict[str, Any]: 查询结果字典
         """
+        show_info(f"Getting all users (limit: {limit}, offset: {offset})", "User Query")
+        
         if limit:
             sql = "SELECT * FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?"
             params = (limit, offset)
@@ -151,7 +194,12 @@ class UserTool:
             sql = "SELECT * FROM users ORDER BY created_at DESC"
             params = None
         
-        return execute(sql, self.db_name, params, self.db_type)
+        result = sql_query(sql, self.db_name, params, self.db_type)
+        
+        if result['success'] and result.get('data'):
+            show_info(f"Retrieved {len(result['data'])} user(s)", "Query Result")
+        
+        return result
     
     def update_user(self, user_id: int, name: Optional[str] = None, email: Optional[str] = None, 
                    age: Optional[int] = None, status: Optional[str] = None) -> Dict[str, Any]:
@@ -166,8 +214,10 @@ class UserTool:
             status: 新的状态（可选）
             
         Returns:
-            执行结果字典
+            Dict[str, Any]: 执行结果字典
         """
+        show_info(f"Updating user ID: {user_id}", "User Update")
+        
         # 构建动态更新SQL
         updates = []
         params = []
@@ -175,20 +225,25 @@ class UserTool:
         if name is not None:
             updates.append("name = ?")
             params.append(name)
+            show_info(f"  - Name: {name}", "Update Fields")
         
         if email is not None:
             updates.append("email = ?")
             params.append(email)
+            show_info(f"  - Email: {email}", "Update Fields")
         
         if age is not None:
             updates.append("age = ?")
             params.append(age)
+            show_info(f"  - Age: {age}", "Update Fields")
         
         if status is not None:
             updates.append("status = ?")
             params.append(status)
+            show_info(f"  - Status: {status}", "Update Fields")
         
         if not updates:
+            show_error("No fields provided for update", "Update Error")
             return {'success': False, 'type': 'error', 'error': '没有提供要更新的字段', 'message': '没有提供要更新的字段'}
         
         updates.append("updated_at = CURRENT_TIMESTAMP")
@@ -196,7 +251,12 @@ class UserTool:
         
         sql = f"UPDATE users SET {', '.join(updates)} WHERE id = ?"
         
-        return execute(sql, self.db_name, params, self.db_type)
+        result = sql_query(sql, self.db_name, params, self.db_type)
+        
+        if result['success']:
+            show_info(f"User {user_id} updated successfully", "User Update")
+        
+        return result
     
     def delete_user(self, user_id: int) -> Dict[str, Any]:
         """
@@ -206,23 +266,38 @@ class UserTool:
             user_id: 用户ID
             
         Returns:
-            执行结果字典
+            Dict[str, Any]: 执行结果字典
         """
+        show_info(f"Deleting user ID: {user_id}", "User Deletion")
+        
         sql = "DELETE FROM users WHERE id = ?"
         params = (user_id,)
         
-        return execute(sql, self.db_name, params, self.db_type)
+        result = sql_query(sql, self.db_name, params, self.db_type)
+        
+        if result['success']:
+            show_info(f"User {user_id} deleted successfully", "User Deletion")
+        
+        return result
     
     def get_user_count(self) -> Dict[str, Any]:
         """
         获取用户总数
         
         Returns:
-            查询结果字典
+            Dict[str, Any]: 查询结果字典
         """
+        show_info("Getting total user count", "User Statistics")
+        
         sql = "SELECT COUNT(*) as total FROM users"
         
-        return execute(sql, self.db_name, db_type=self.db_type)
+        result = sql_query(sql, self.db_name, db_type=self.db_type)
+        
+        if result['success'] and result.get('data'):
+            count = result['data'][0]['total'] if result['data'] else 0
+            show_info(f"Total user count: {count}", "Statistics Result")
+        
+        return result
     
     def get_users_by_status(self, status: str) -> Dict[str, Any]:
         """
@@ -232,12 +307,19 @@ class UserTool:
             status: 用户状态
             
         Returns:
-            查询结果字典
+            Dict[str, Any]: 查询结果字典
         """
+        show_info(f"Getting users with status: {status}", "User Query")
+        
         sql = "SELECT * FROM users WHERE status = ? ORDER BY created_at DESC"
         params = (status,)
         
-        return execute(sql, self.db_name, params, self.db_type)
+        result = sql_query(sql, self.db_name, params, self.db_type)
+        
+        if result['success'] and result.get('data'):
+            show_info(f"Found {len(result['data'])} user(s) with status '{status}'", "Query Result")
+        
+        return result
 
 
 # 便捷函数
@@ -250,7 +332,7 @@ def get_user_by_name_and_email(name: str, email: str) -> Dict[str, Any]:
         email: 用户邮件地址
         
     Returns:
-        查询结果字典
+        Dict[str, Any]: 查询结果字典
     """
     user_tool = UserTool()
     return user_tool.get_user_by_name_and_email(name, email)
@@ -267,7 +349,7 @@ def add_user(name: str, email: str, age: Optional[int] = None, status: str = "ac
         status: 用户状态，默认为 'active'
         
     Returns:
-        执行结果字典
+        Dict[str, Any]: 执行结果字典
     """
     user_tool = UserTool()
     return user_tool.add_user(name, email, age, status)
@@ -281,10 +363,11 @@ def search_users_by_name(name_pattern: str) -> Dict[str, Any]:
         name_pattern: 用户名称模式（支持 % 通配符）
         
     Returns:
-        查询结果字典
+        Dict[str, Any]: 查询结果字典
     """
     user_tool = UserTool()
     return user_tool.search_users_by_name(name_pattern)
+    
 
 
 # 测试函数
