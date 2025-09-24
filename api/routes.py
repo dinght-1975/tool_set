@@ -30,7 +30,28 @@ from services.tool_service import ToolService
 # 创建路由器
 router = APIRouter(prefix="/apis", tags=["apis"])
 
+# ==================== 系统状态 API ====================
 
+@router.get("/health/status", summary="获取系统健康状态")
+async def get_system_health() -> Dict[str, Any]:
+    """获取系统健康状态"""
+    try:
+        
+        
+        return {
+            "status": "healthy" ,
+            "services": {
+                "chromadb": "connected" ,
+                "recently_used": "connected"
+            },
+            "timestamp": "2025-08-30T00:00:00Z"
+        }
+    except Exception as e:
+        return {
+            "status": "unhealthy",
+            "error": str(e),
+            "timestamp": "2025-08-30T00:00:00Z"
+        }
 
 
 # ==================== 动态路由管理器 ====================
@@ -314,61 +335,5 @@ class DynamicRouteManager:
         }
 
 
-# 动态路由管理器实例将在 main.py 中创建
-# dynamic_route_manager = DynamicRouteManager(router)
-
-
-
-
-# ==================== 系统状态 API ====================
-
-@router.get("/health/status", summary="获取系统健康状态")
-async def get_system_health() -> Dict[str, Any]:
-    """获取系统健康状态"""
-    try:
-        
-        
-        return {
-            "status": "healthy" ,
-            "services": {
-                "chromadb": "connected" ,
-                "recently_used": "connected"
-            },
-            "timestamp": "2025-08-30T00:00:00Z"
-        }
-    except Exception as e:
-        return {
-            "status": "unhealthy",
-            "error": str(e),
-            "timestamp": "2025-08-30T00:00:00Z"
-        }
-
-@router.get("/test-execution-logs", summary="测试执行日志功能")
-async def test_execution_logs() -> Dict[str, Any]:
-    """测试执行日志功能"""
-    try:
-        from utils.exe_log import write_execution_log, ExecutionLogger
-        
-        # 模拟一些执行日志
-        write_execution_log("SELECT * FROM test_table", {"count": 5}, time_cost_ms=100)
-        write_execution_log("INSERT INTO logs (message) VALUES (?)", {"affected_rows": 1}, time_cost_ms=50)
-        write_execution_log("UPDATE users SET status = ?", {"affected_rows": 3}, time_cost_ms=75)
-        
-        # 获取线程日志
-        thread_logs = ExecutionLogger.get_thread_logs()
-        
-        return {
-            "message": "Execution logs test completed",
-            "success": True,
-            "logs_count": len(thread_logs),
-            "execution_logs": thread_logs
-        }
-    except Exception as e:
-        print_exception_stack(e, "测试执行日志", "ERROR")
-        return {
-            "message": f"Error: {str(e)}",
-            "success": False,
-            "error": str(e)
-        }
 
 
