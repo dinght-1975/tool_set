@@ -10,12 +10,12 @@ from utils.db.sql_db import execute
 from typing import Dict, Any, Optional
 
 
-def get_order_data(customer_order_id: str) -> Dict[str, Any]:
+def get_order_data(customer_order_id: int) -> Dict[str, Any]:
     """
     获取订单数据
     
     Args:
-        customer_order_id (str): 客户订单ID
+        customer_order_id (int): 客户订单ID
         
     Returns:
         Dict[str, Any]: 订单数据字典，包含以下字段：
@@ -147,12 +147,12 @@ def _get_tenant_region(bill_id: str) -> Optional[Dict[str, int]]:
         return None
 
 
-def get_order_status(customer_order_id: str) -> Dict[str, Any]:
+def get_order_status(customer_order_id: int) -> Dict[str, Any]:
     """
     获取订单状态
     
     Args:
-        customer_order_id (str): 客户订单ID
+        customer_order_id (int): 客户订单ID
         
     Returns:
         Dict[str, Any]: 订单状态信息
@@ -187,12 +187,12 @@ def get_order_status(customer_order_id: str) -> Dict[str, Any]:
         }
 
 
-def check_order_exists(customer_order_id: str) -> bool:
+def check_order_exists(customer_order_id: int) -> bool:
     """
     检查订单是否存在
     
     Args:
-        customer_order_id (str): 客户订单ID
+        customer_order_id (int): 客户订单ID
         
     Returns:
         bool: 订单是否存在
@@ -202,12 +202,10 @@ def check_order_exists(customer_order_id: str) -> bool:
         
         order_data = get_order_data(customer_order_id)
         
-        if 'error' in order_data:
-            return False
-        
-        # 如果订单有bill_id，说明订单存在
-        return bool(order_data.get('bill_id'))
+        if order_data['status'] == 'error':
+            return f"Can not find the order, {order_data['error']}"
+
         
     except Exception as e:
         show_error(f"检查订单是否存在时发生错误: {str(e)}")
-        return False
+        return f"检查订单是否存在时发生错误: {str(e)}"

@@ -7,6 +7,7 @@
 import asyncio
 import importlib
 import inspect
+import json
 from functools import wraps
 from fastapi import APIRouter, HTTPException, Query, Path as FastAPIPath, Body, Depends
 from fastapi.responses import JSONResponse
@@ -14,8 +15,32 @@ from typing import List, Dict, Any, Optional, Callable, Union
 from pydantic import BaseModel, create_model, validator, Field
 import sys
 from pathlib import Path
+from datetime import datetime
 from utils.exception_handler import print_exception_stack, safe_execute
-from utils.output import show_error, get_result, clear_result
+from utils.output import show_error, get_output_data, clear_output
+from utils.exe_log import ExecutionLogger
+from utils.db.sql_db import clear_db_list
+
+
+class DateTimeEncoder(json.JSONEncoder):
+    """自定义 JSON 编码器，处理 datetime 对象"""
+    def default(self, obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        return super().default(obj)
+
+
+class DateTimeJSONResponse(JSONResponse):
+    """自定义 JSONResponse，使用 DateTimeEncoder 处理 datetime 对象"""
+    def render(self, content: Any) -> bytes:
+        return json.dumps(
+            content,
+            ensure_ascii=False,
+            allow_nan=False,
+            indent=None,
+            separators=(",", ":"),
+            cls=DateTimeEncoder
+        ).encode("utf-8")
 
 # 添加项目根目录到 Python 路径（如果还没有添加）
 current_file = Path(__file__).resolve()
@@ -176,45 +201,54 @@ class DynamicRouteManager:
         # 生成端点函数
         async def dynamic_endpoint(request: request_model = Body(...)) -> JSONResponse:
             # 清除之前的线程变量结果
-            clear_result()
-            
+            clear_output()
             # 清除执行日志线程变量
-            from utils.exe_log import ExecutionLogger
             ExecutionLogger.clear_thread_logs()
-            
+            # 清除数据库连接
+            clear_db_list()
+
             try:
                 # 记录工具使用
                 await self._record_tool_usage(tool_node)
-                
                 # 执行工具函数
-                await self._execute_tool_function(tool_node, request)
-                
+                return_data = await self._execute_tool_function(tool_node, request)
+                if return_data == None:
+                    return_data = "Execution Done"
                 # 获取线程变量中的结果
-                result = get_result()
+                output_list = get_output_data()
                 
                 # 获取执行日志并添加到响应中
                 execution_logs = ExecutionLogger.get_thread_logs()
-                if execution_logs:
-                    result["execution_logs"] = execution_logs
-                
+                response_obj = {
+                    "status": "success",
+                    "output": output_list,
+                    "data": return_data,
+                    "execution_logs": execution_logs,
+                    "error": ""
+                }
                 # 返回线程变量中的结果
-                return JSONResponse(content=result)
-                    
+                return DateTimeJSONResponse(content=response_obj)
+                        
             except Exception as e:
                 # 捕获所有异常，调用 show_error
                 show_error(str(e), f"执行工具 {tool_node.name} 时发生错误")
                 print_exception_stack(e, "执行工具函数", "ERROR")
                 
-                # 获取线程变量中的结果（包含错误信息）
-                result = get_result()
+                # 获取线程变量中的结果
+                output_list = get_output_data()
                 
                 # 获取执行日志并添加到响应中
                 execution_logs = ExecutionLogger.get_thread_logs()
-                if execution_logs:
-                    result["execution_logs"] = execution_logs
-                
+                response_obj = {
+                    "status": "error",
+                    "output": output_list,
+                    "data": "",
+                    "execution_logs": execution_logs,
+                    "error": f"{str(e)}"
+                }
+
                 # 返回错误结果
-                return JSONResponse(content=result, status_code=500)
+                return DateTimeJSONResponse(content=response_obj, status_code=500)
         
         # 设置函数元数据
         dynamic_endpoint.__name__ = f"execute_{tool_node.name}"
@@ -232,7 +266,7 @@ class DynamicRouteManager:
             # 记录失败不影响主要功能
             pass
     
-    async def _execute_tool_function(self, tool_node: ToolNode, request: Any) -> None:
+    async def _execute_tool_function(self, tool_node: ToolNode, request: Any) -> Any:
         """执行工具函数"""
         try:
             # 根据 module_path 和 function_name 动态导入和执行函数
@@ -254,19 +288,19 @@ class DynamicRouteManager:
                     if tool_node.parameters:
                         # 有参数的情况
                         kwargs = request.dict() if hasattr(request, 'dict') else request
-                        await func(**kwargs)
+                        return await func(**kwargs)
                     else:
                         # 无参数的情况
-                        await func()
+                        return await func()
                 else:
                     # 同步函数
                     if tool_node.parameters:
                         # 有参数的情况
                         kwargs = request.dict() if hasattr(request, 'dict') else request
-                        func(**kwargs)
+                        return func(**kwargs)
                     else:
                         # 无参数的情况
-                        func()
+                        return func()
             else:
                 raise ValueError(f"模块 {module_path} 中未找到函数 {tool_node.function_name}")
                 

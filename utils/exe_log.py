@@ -16,6 +16,14 @@ from utils.output import show_info, show_error, show_warning
 from utils.exception_handler import print_exception_stack
 
 
+class DateTimeEncoder(json.JSONEncoder):
+    """自定义 JSON 编码器，处理 datetime 对象"""
+    def default(self, obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        return super().default(obj)
+
+
 class ExecutionLogConfig:
     """执行日志配置管理"""
     
@@ -89,7 +97,8 @@ class ExecutionLogger:
     
     @staticmethod
     def write_log(command: str, result: Any = None, 
-                  execution_time: Optional[datetime] = None, time_cost_ms: int = 0) -> bool:
+                  execution_time: Optional[datetime] = None, time_cost_ms: int = 0, 
+                  command_type: str = "unknown") -> bool:
         """
         写入执行日志的静态方法
         
@@ -98,6 +107,7 @@ class ExecutionLogger:
             result: 执行结果
             execution_time: 执行时间，默认为当前时间
             time_cost_ms: 执行耗时（毫秒）
+            command_type: 命令类型 (sql, linux, ftp, etc.)
             
         Returns:
             bool: 是否写入成功
@@ -105,7 +115,7 @@ class ExecutionLogger:
         logger = ExecutionLogger.get_instance()
         # 从线程变量获取用户信息
         user = logger._get_current_user()
-        return logger._write_log_impl(user, command, result, execution_time, time_cost_ms)
+        return logger._write_log_impl(user, command, result, execution_time, time_cost_ms, command_type)
     
     @staticmethod
     def set_current_user(user: str) -> None:
@@ -236,7 +246,8 @@ class ExecutionLogger:
         self.log_dir = Path(log_dir)
     
     def _write_log_impl(self, user: str, command: str, result: Any = None, 
-                       execution_time: Optional[datetime] = None, time_cost_ms: int = 0) -> bool:
+                       execution_time: Optional[datetime] = None, time_cost_ms: int = 0, 
+                       command_type: str = "unknown") -> bool:
         """
         写入执行日志
         
@@ -246,6 +257,7 @@ class ExecutionLogger:
             result: 执行结果
             execution_time: 执行时间，默认为当前时间
             time_cost_ms: 执行耗时（毫秒）
+            command_type: 命令类型 (sql, linux, ftp, etc.)
             
         Returns:
             bool: 是否写入成功
@@ -257,21 +269,21 @@ class ExecutionLogger:
             # 处理结果数据
             if result is not None:
                 if isinstance(result, (dict, list)):
-                    result_str = json.dumps(result, ensure_ascii=False, indent=2)
+                    result_str = json.dumps(result, ensure_ascii=False, indent=2, cls=DateTimeEncoder)
                 else:
                     result_str = str(result)
             else:
                 result_str = None
             
-            # 保存到线程变量
-            self._save_to_thread_logs(user, command, result, execution_time, time_cost_ms)
+            # 保存到线程变量 - 使用处理后的结果字符串
+            self._save_to_thread_logs(user, command, result_str, execution_time, time_cost_ms, command_type)
             
             if self.config.log_type == 'mysql':
-                return self._write_mysql_log(user, command, result_str, execution_time, time_cost_ms)
+                return self._write_mysql_log(user, command, result_str, execution_time, time_cost_ms, command_type)
             elif self.config.log_type == 'sqlite':
-                return self._write_sqlite_log(user, command, result_str, execution_time, time_cost_ms)
+                return self._write_sqlite_log(user, command, result_str, execution_time, time_cost_ms, command_type)
             elif self.config.log_type == 'file':
-                return self._write_file_log(user, command, result_str, execution_time, time_cost_ms)
+                return self._write_file_log(user, command, result_str, execution_time, time_cost_ms, command_type)
             
         except Exception as e:
             print_exception_stack(e, "写入执行日志", "ERROR")
@@ -279,16 +291,16 @@ class ExecutionLogger:
             return False
     
     def _write_mysql_log(self, user: str, command: str, result: str, 
-                        execution_time: datetime, time_cost_ms: int) -> bool:
+                        execution_time: datetime, time_cost_ms: int, command_type: str = "unknown") -> bool:
         """写入 MySQL 日志"""
         try:
             sql = """
-            INSERT INTO execution_logs (user_name, command, result, execution_time, time_cost_ms)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO execution_logs (user_name, command, result, execution_time, time_cost_ms, command_type)
+            VALUES (%s, %s, %s, %s, %s, %s)
             """
             
             with self.mysql_conn.cursor() as cursor:
-                cursor.execute(sql, (user, command, result, execution_time, time_cost_ms))
+                cursor.execute(sql, (user, command, result, execution_time, time_cost_ms, command_type))
                 self.mysql_conn.commit()
             
             return True
@@ -298,17 +310,17 @@ class ExecutionLogger:
             return False
     
     def _write_sqlite_log(self, user: str, command: str, result: str, 
-                         execution_time: datetime, time_cost_ms: int) -> bool:
+                         execution_time: datetime, time_cost_ms: int, command_type: str = "unknown") -> bool:
         """写入 SQLite 日志"""
         try:
             sql = """
-            INSERT INTO execution_logs (user_name, command, result, execution_time, time_cost_ms)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO execution_logs (user_name, command, result, execution_time, time_cost_ms, command_type)
+            VALUES (?, ?, ?, ?, ?, ?)
             """
             
             with self.sqlite_conn:
                 self.sqlite_conn.execute(sql, (user, command, result, 
-                                             execution_time.isoformat(), time_cost_ms))
+                                             execution_time.isoformat(), time_cost_ms, command_type))
             
             return True
             
@@ -317,7 +329,7 @@ class ExecutionLogger:
             return False
     
     def _write_file_log(self, user: str, command: str, result: str, 
-                       execution_time: datetime, time_cost_ms: int) -> bool:
+                       execution_time: datetime, time_cost_ms: int, command_type: str = "unknown") -> bool:
         """写入文件日志"""
         try:
             # 按日期创建日志文件
@@ -330,12 +342,13 @@ class ExecutionLogger:
                 'user': user,
                 'command': command,
                 'result': result,
-                'time_cost_ms': time_cost_ms
+                'time_cost_ms': time_cost_ms,
+                'command_type': command_type
             }
             
             # 写入文件
             with open(log_file, 'a', encoding='utf-8') as f:
-                f.write(json.dumps(log_entry, ensure_ascii=False) + '\n')
+                f.write(json.dumps(log_entry, ensure_ascii=False, cls=DateTimeEncoder) + '\n')
             
             return True
             
@@ -486,7 +499,8 @@ class ExecutionLogger:
         return logs[:limit]
     
     def write_log(self, command: str, result: Any = None, 
-                  execution_time: Optional[datetime] = None, time_cost_ms: int = 0) -> bool:
+                  execution_time: Optional[datetime] = None, time_cost_ms: int = 0, 
+                  command_type: str = "unknown") -> bool:
         """
         写入执行日志的公共方法
         
@@ -495,13 +509,14 @@ class ExecutionLogger:
             result: 执行结果
             execution_time: 执行时间，默认为当前时间
             time_cost_ms: 执行耗时（毫秒）
+            command_type: 命令类型 (sql, linux, ftp, etc.)
             
         Returns:
             bool: 是否写入成功
         """
         # 从线程变量获取用户信息
         user = self._get_current_user()
-        return self._write_log_impl(user, command, result, execution_time, time_cost_ms)
+        return self._write_log_impl(user, command, result, execution_time, time_cost_ms, command_type)
     
     def _get_current_user(self) -> str:
         """
@@ -519,14 +534,15 @@ class ExecutionLogger:
             return "system"
     
     def _save_to_thread_logs(self, user: str, command: str, result: Any, 
-                           execution_time: datetime, time_cost_ms: int) -> None:
+                           execution_time: datetime, time_cost_ms: int, command_type: str = "unknown") -> None:
         """保存执行日志到线程变量"""
         log_entry = {
             'user': user,
             'command': command,
             'result': result,
             'execution_time': execution_time.isoformat(),
-            'time_cost_ms': time_cost_ms
+            'time_cost_ms': time_cost_ms,
+            'command_type': command_type
         }
         self._thread_local.exe_logs.append(log_entry)
     
@@ -554,7 +570,8 @@ def get_execution_logger() -> ExecutionLogger:
     return ExecutionLogger.get_instance()
 
 def write_execution_log(command: str, result: Any = None, 
-                       execution_time: Optional[datetime] = None, time_cost_ms: int = 0) -> bool:
+                       execution_time: Optional[datetime] = None, time_cost_ms: int = 0, 
+                       command_type: str = "unknown") -> bool:
     """
     写入执行日志的便捷函数
     
@@ -563,12 +580,29 @@ def write_execution_log(command: str, result: Any = None,
         result: 执行结果
         execution_time: 执行时间，默认为当前时间
         time_cost_ms: 执行耗时（毫秒）
+        command_type: 命令类型 (sql, linux, ftp, etc.)
         
     Returns:
         bool: 是否写入成功
     """
     logger = ExecutionLogger.get_instance()
-    return logger.write_log(command, result, execution_time, time_cost_ms)
+    return logger.write_log(command, result, execution_time, time_cost_ms, command_type)
+
+def write_sql_log(command: str, result: Any = None, 
+                  execution_time: Optional[datetime] = None, time_cost_ms: int = 0) -> bool:
+    """
+    写入 SQL 执行日志的便捷函数
+    
+    Args:
+        command: 执行的 SQL 命令
+        result: 执行结果
+        execution_time: 执行时间，默认为当前时间
+        time_cost_ms: 执行耗时（毫秒）
+        
+    Returns:
+        bool: 是否写入成功
+    """
+    return write_execution_log(command, result, execution_time, time_cost_ms, "sql")
 
 def query_execution_logs(user: Optional[str] = None, 
                         start_time: Optional[datetime] = None,

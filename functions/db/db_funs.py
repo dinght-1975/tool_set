@@ -92,7 +92,7 @@ def sql_query(sql: str, db_name: Optional[str] = None, params: Optional[Union[tu
         if params:
             show_info(f"Parameters: {params}", "SQL Parameters")
         
-        result = sql_execute(sql, db_name, params, db_type)
+        result = sql_execute(sql, db_name, params)
         
         if result.get('success', False):
             if 'data' in result and result['data']:

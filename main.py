@@ -21,8 +21,8 @@ import traceback
 from utils.exception_handler import print_exception_stack, handle_exception
 from utils.logger_config import setup_logging
 
-# 设置日志 - 从环境变量读取配置
-logger = setup_logging()
+# 设置日志 - 从环境变量读取配置，启用控制台输出
+logger = setup_logging(enable_console=True)
 
 app = FastAPI(title="Lupin Studio Backend", version="0.1.0")
 
