@@ -116,6 +116,27 @@ def create_function_link(function_id: str, title: str, params: Optional[Dict[str
     return f"🔗 FUNCTION_LINK: {json.dumps(link_data, ensure_ascii=False)}"
 
 
+def create_web_link(url: str, title: str) -> str:
+    """
+    Create a web link string that can be displayed as a clickable link in the UI.
+    
+    Args:
+        url (str): The URL to link to
+        title (str): The display title for the link
+        
+    Returns:
+        str: A formatted link string that can be parsed by the frontend
+    """
+    link_data = {
+        "type": "web_link",
+        "url": url,
+        "title": title
+    }
+    
+    # Return as a special formatted string that the frontend can parse
+    return f"🌐 WEB_LINK: {json.dumps(link_data, ensure_ascii=False)}"
+
+
 def write_function_link(function_id: str, title: str, params: Optional[Dict[str, Any]] = None) -> None:
     """
     Create a function link and write it to the output as an info message.
@@ -127,3 +148,15 @@ def write_function_link(function_id: str, title: str, params: Optional[Dict[str,
     """
     link_string = create_function_link(function_id, title, params)
     show_info(link_string, "Function Link")
+
+
+def write_web_link(url: str, title: str) -> None:
+    """
+    Create a web link and write it to the output as an info message.
+    
+    Args:
+        url (str): The URL to link to
+        title (str): The display title for the link
+    """
+    link_string = create_web_link(url, title)
+    show_info(link_string, "Web Link")

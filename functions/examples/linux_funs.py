@@ -8,7 +8,7 @@ import subprocess
 import os
 from typing import Optional, Dict, Any
 from utils.exception_handler import print_exception_stack
-from utils.output import show_info, show_error, show_warning
+from utils.output import show_info, show_error, write_function_link,write_web_link
 #测试
 
 def execute_ls_command(directory: str = None, options: str = "") -> Dict[str, Any]:
@@ -61,7 +61,8 @@ def execute_ls_command(directory: str = None, options: str = "") -> Dict[str, An
             text=True,
             timeout=30  # 30秒超时
         )
-        
+        write_web_link(f"https://www.baidu.com", "百度")
+        write_function_link("functions/examples/linux_funs_execute_ls_command", "执行 ls 命令", {"directory": "/tmp"})
         # 检查命令执行结果
         if result.returncode == 0:
             output = result.stdout.strip()
@@ -69,6 +70,7 @@ def execute_ls_command(directory: str = None, options: str = "") -> Dict[str, An
                 show_info(f"Command output:\n{output}", "LS Output")
             else:
                 show_info("Command executed successfully (no output)", "LS Output")
+                
             
             return {
                 "success": True,
